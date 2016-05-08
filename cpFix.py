@@ -157,7 +157,7 @@ def handleDirectory(directory, webpart):
                         moved=True
                     except Exception as e:
                         print(e.message+" "+e.__doc__)
-            if any(j in i.lower() for j in ["readme", "read-me", "read_me", "test", "phpinfo", "changelog"]):
+            if not moved and any(j in i.lower() for j in ["readme", "read-me", "read_me", "test", "phpinfo", "changelog"]):
                 page=(accountDomains[currentAccount][0]+("/"+webpart+"/" if len(webpart)>0 else "/")+i)
                 mv=yorn("Review "+page+" in your browser for information disclosure. Should I move this file to a non-public location?")
                 if mv:
