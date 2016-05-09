@@ -11,6 +11,8 @@ import sys
 import errno
 import time
 
+debug = False
+
 defaults=["index.html", "index.htm", "index.shtml", "index.php", "index.php5", "index.php4", "index.php3", "index.cgi", "default.html", "default.htm", "home.html", "home.htm", "Index.html", "Index.htm", "Index.shtml", "Index.php", "Index.cgi", "Default.html", "Default.htm", "Home.html", "Home.htm", "placeholder.html"]
 indexDefault="""<!DOCTYPE html>
 <html>
@@ -33,6 +35,8 @@ hitwww=True
 currentAccount=""
 verbose=False
 storeDir = "/usr/local/cpFix/"
+writeIndexes=False
+intense=False
 
 def setAccountDomains():
     try:
@@ -62,17 +66,27 @@ def defaultInDir(directory):
     return (len([i for i in files(directory) if i in defaults])>0)
 
 def mkdir(account=""):
+    global storeDir
     if account == "":
         try:
             os.system("mkdir /usr/local/cpFix 2>/dev/null")
             return True
-        except:
+        except Exception as e:
+            print("Can't mkdir /usr/local.cpFix:"+ str(e.__doc__))
             return False
-    else:
+    elif account == "result":
         try:
             os.system("mkdir "+storeDir+account+" 2>/dev/null")
             return True
-        except:
+        except Exception as e:
+            print("Can't mkdir "+storeDir+account+":"+ str(e.__doc__))
+            return False
+    else:
+        try:
+            os.system("mkdir /home/"+account+"/cpFix 2>/dev/null")
+            return True
+        except Exception as e:
+            print( "Can't mkdir /home/"+account+"/cpFix :"+str(e.__doc__))
             return False
 
 def writeNoClobber(fileName, directory="", file=indexDefault):
@@ -87,7 +101,7 @@ def writeNoClobber(fileName, directory="", file=indexDefault):
         if e.errno == errno.EEXIST:
             return False
         else:
-            print(e)
+            print(str(e.__doc__))
             return False
     else:
         with os.fdopen(file_handle, 'w') as file_obj:
@@ -100,8 +114,8 @@ def writeIndexIfNotExists(directory):
         if stdin:
             status=writeNoClobber("index.html", directory)
             if status:
-                os.system("chown "+currentAccount+":"+currentAccount+" "+directory+"/index.html")
-                os.system("chmod 644 "+directory+"/index.html")
+                os.system("chown "+currentAccount+":"+currentAccount+" \""+directory+"/index.html\"")
+                os.system("chmod 644 \""+directory+"/index.html\"")
             return status
     return False
 
@@ -140,53 +154,57 @@ def handleDirectory(directory, webpart):
     global changedOwn
     global storeDir
     global crawledFiles
+    global writeIndexes
+    global debug
     try:
         for i in files(directory):
             moved=False
+            asked=False
             if verbose:
                 crawledFiles.append(directory+"/"+i)
-            if not i.lower().endswith((".ftpquota",".htaccess",".tng",".cur", ".ani", ".otf", ".woff2", ".eot", ".ttf", ".woff", ".svg", ".html", ".php", ".htm", ".xml", ".json", ".css", ".js", ".jpg", ".ico", ".png", ".mp4", ".gif", ".xcf")):
+            if intense and ((not i.lower().endswith((".scss",".sass",".ds_store", ".eps", ".pdf", ".ftpquota",".htaccess",".tng",".cur", ".ani", ".otf", ".tpl",".woff2", ".eot", ".ttf", ".woff", ".svg", ".html", ".php", ".htm", ".xml", ".json", ".css", ".js",".js.gz", ".jpg",".svn-base", "sitemap.xsl", ".jpeg", "thumbs.db", ".ico", ".png", ".mp4", ".gif",".gdf",".yml", ".log", ".xcf", ".less", ".css.map", ".crt", ".swf", ".xap"))) and (not (i.lower().endswith((".po", ".mo", ".pot")) and "language" not in i)) and (i != "error_log")): #whitelist
                 page=(accountDomains[currentAccount][0]+("/"+webpart+"/" if len(webpart)>0 else "/")+i)
                 mvFile=yorn("Review "+page+" in your browser for information disclosure. Should I move this file to a non-public location?")
+                asked = True
                 if mvFile:
                     try:
                         fileWithPath=directory+"/"+i
-                        syscall = "mv "+fileWithPath+" "+storeDir+currentAccount+"/"+(fileWithPath.replace("/", "_")[1:])
+                        syscall = "mv \""+fileWithPath+"\" /home/"+currentAccount+"/cpFix/"+(fileWithPath.replace("/", "_").replace(" ", "~")[1:])
                         os.system(syscall)
                         movedFiles.append(page+" moved with "+syscall)
                         moved=True
                     except Exception as e:
-                        print(e.message+" "+e.__doc__)
-            if not moved and any(j in i.lower() for j in ["readme", "read-me", "read_me", "test", "phpinfo", "changelog"]):
+                        print(str(e.__doc__))
+            if not moved and not asked and (((any(j in i.lower() for j in ["install", "php.ini", "backup", "wp-config",".old", "-old", "readme", "read-me", "read_me", "phpinfo", "changelog"]) or ("test" in i and (not "testim" in i and not "latest" in i)) or (i.endswith((".sql", "bak", "back", "~"))))) and (not i.lower().endswith((".scss",".sass",".ds_store", ".eps", ".pdf", ".ftpquota",".htaccess",".tng",".cur", ".ani", ".otf", ".tpl",".woff2", ".eot", ".ttf", ".woff", ".svg", ".php", ".xml", ".json", ".css", ".js",".js.gz", ".jpg", "sitemap.xsl", ".jpeg", "thumbs.db", ".ico", ".png", ".mp4", ".gif",".gdf",".yml", ".log", ".xcf", ".less", ".css.map",  ".swf", ".xap")))): #blacklist
                 page=(accountDomains[currentAccount][0]+("/"+webpart+"/" if len(webpart)>0 else "/")+i)
                 mv=yorn("Review "+page+" in your browser for information disclosure. Should I move this file to a non-public location?")
                 if mv:
                     try:
                         fileWithPath=directory+"/"+i
-                        syscall = "mv "+fileWithPath+" "+storeDir+currentAccount+"/"+(fileWithPath.replace("/", "_")[1:])
+                        syscall = "mv \""+fileWithPath+"\" /home/"+currentAccount+"/cpFix/"+(fileWithPath.replace("/", "_").replace(" ", "~")[1:])
                         os.system(syscall)
                         movedFiles.append(page+" moved with "+syscall)
                         moved = True
                     except Exception as e:
-                        print(e.message+" "+e.__doc__)
+                        print(str(e.__doc__))
             if not moved:
-                stdout=os.popen("ls -la "+directory+"/"+i).read()
+                stdout=os.popen("ls -la \""+directory+"/"+i+"\"").read()
                 columns=stdout.split(' ')
-                if not (stdout.startswith("-rw-r--r--") or columns[0].endswith("------")):
+                if not (stdout.startswith("-rw-r--r--") or columns[0].endswith("-----") ):
                     change = False
                     if verbose:
                         change=yorn("Current permissions for "+directory+"/"+i+" are set to:\n"+columns[0]+"\nChange to 644?")
                     if (not verbose) or change:
-                        os.system("chmod 644 "+directory+"/"+i)
+                        os.system("chmod 644 \""+directory+"/"+i+"\"")
                         changedPerms[directory+"/"+i]={columns[0]:"-rw-r--r--"}
                     if currentAccount != columns[2] and currentAccount != columns[3]:
                         change = False
                         if verbose:
                             change = yorn("Current owner for "+directory+"/"+i+" are: "+columns[2]+":"+columns[3]+". Change to "+currentAccount+":"+currentAccount+" ?")
                         if (not verbose) or change:
-                            os.system("chown "+currentAccount+":"+currentAccount+" "+directory+"/"+i)
+                            os.system("chown "+currentAccount+":"+currentAccount+" \""+directory+"/"+i+"\"")
                             changedOwn[directory+"/"+i]={columns[2]+":"+columns[3]:currentAccount+":"+currentAccount}
-        stdout=os.popen("ls -la "+directory+" | head -n 2 | tail -n -1").read()
+        stdout=os.popen("ls -la \""+directory+"\" | head -n 2 | tail -n -1").read()
         columns=' '.join(stdout.split()).split()
         if not directory.endswith("public_html"):
             goPerms=columns[0][4:]
@@ -195,14 +213,14 @@ def handleDirectory(directory, webpart):
                 if verbose:
                     change = yorn("Current permissions for "+directory+" are set to: "+columns[0]+"\nChange to 755?")
                 if (not verbose) or change:
-                    os.system("chmod 755 "+directory)
+                    os.system("chmod 755 \""+directory+"\"")
                     changedPerms[directory]={columns[0]:"drwxr-xr-x"}
             if currentAccount != columns[2] or currentAccount != columns[3]:
                 change = False
                 if verbose:
                     change = yorn("Current owner for "+directory+" are: "+columns[2]+":"+columns[3]+". Change to "+currentAccount+":"+currentAccount+" ?")
                 if (not verbose) or change:
-                    os.system("chown "+currentAccount+":"+currentAccount+" "+directory)
+                    os.system("chown "+currentAccount+":"+currentAccount+" \""+directory+"\"")
                     changedOwn[directory]={columns[2]+":"+columns[3]:currentAccount+":"+currentAccount}
         if directory.endswith("public_html"):
             if not (stdout.startswith("drwxr-x---")):
@@ -210,7 +228,7 @@ def handleDirectory(directory, webpart):
                 if verbose:
                     change = yorn("Current permissions for "+directory+" are set to: "+columns[0]+"\nChange to 750?")
                 if (not verbose) or change:
-                    os.system("chmod 750 "+directory)
+                    os.system("chmod 750 \""+directory+"\"")
                     changedPerms[directory]={columns[0]:"drwxr-x---"}
             if currentAccount != columns[2] or "nobody" != columns[3]:
                 change = False
@@ -219,12 +237,14 @@ def handleDirectory(directory, webpart):
                 if (not verbose) or change:
                     os.system("chown "+currentAccount+":nobody "+directory)
                     changedOwn[directory]={columns[2]+":"+columns[3]:currentAccount+":nobody"}
-        wroteIndex=writeIndexIfNotExists(directory)
-        if(wroteIndex):
-            indexWrittenTo.append(directory)
+        if writeIndexes:
+            wroteIndex=writeIndexIfNotExists(directory)
+            if(wroteIndex):
+                indexWrittenTo.append(directory)
     except Exception as e:
-        print(e.message, e.__doc__)
-    #print("calling recurse("+directory+")")#TEST
+        print( str(e.__doc__))
+    if debug:
+        print("calling recurse("+directory+")")#TEST
     recurse(directory)
 
 def recurse(directory):
@@ -234,19 +254,31 @@ def recurse(directory):
 def drive(directory):
     global hitwww
     global currentAccount
+    global debug
     account, webpart, webroot=parseDirectory(directory)
+    if debug:
+        print(str(account), str(webpart), str(webroot))
     if currentAccount!=account:
-        mkdir(account)
+        if account:
+            print("\n\n\t-----------\nEntering account "+str(account)+" for site(s) "+str(accountDomains[account])+"\n\n")
+            if debug:
+                print("calling mkdir("+str(account)+")")
+            res=mkdir(account)
+        if debug:
+            print("mkdir("+str(account)+") = "+str(res))
         hitwww=True
         currentAccount=account
     if webroot:
         if "public_html" in webroot:
             hitwww=False
-            #print("calling handleDirectory("+directory+","+webpart+")")#TEST
+            if debug:
+                print("calling handleDirectory("+directory+","+webpart+")")#TEST
             handleDirectory(directory, webpart)
         if webroot == "www" and hitwww==True:
             handleDirectory(directory, webpart)
     elif hitwww:
+        if(debug):
+            print("calling recurse("+directory+")")
         recurse(directory)
 
 def usage():
@@ -256,11 +288,13 @@ def setOpts():
     global verbose
     global startDir
     global defaultIndex
+    global writeIndexes
     if "-h" in sys.argv or "--help" in sys.argv:
         usage()
     else:
         pos = -1
         if "-d" in sys.argv or "--directory" in sys.argv:
+            """directory to start from"""
             try:
                 pos=sys.argv.index("-d")
             except:
@@ -272,6 +306,7 @@ def setOpts():
                 startDir=os.path.abspath(sys.argv[pos+1])
                 pos = -1
         if "-i" in sys.argv or "--index" in sys.argv:
+            """pass -i to write default index.html files in dirs under public_html they don't exist"""
             try:
                 pos=sys.argv.index("-i")
             except:
@@ -280,9 +315,32 @@ def setOpts():
                 except:
                     pass
             if pos > 0:
+                writeIndexes=True
+                pos=-1
+        if "-is" in sys.argv or "--index-stdin" in sys.argv:
+            try:
+                pos=sys.argv.index("-is")
+            except:
+                try:
+                    pos=sys.argv.index("--index-stdin")
+                except:
+                    pass
+            if pos > 0:
                 defaultIndex=sys.argv[pos+1]
                 pos = -1
+        if "-t" in sys.argv or "--thorough" in sys.argv:
+            try:
+                pos=sys.argv.index("-t")
+            except:
+                try:
+                    pos=sys.argv.index("--thorough")
+                except:
+                    pass
+            if pos > 0:
+                intense=True
+                pos = -1
         if "-v" in sys.argv or "--verbose" in sys.argv:
+            """Give user y or n choice to make all changes after explaining recomendation"""
             try:
                 pos=sys.argv.index("-v")
             except:
@@ -334,15 +392,23 @@ def printResults():
     print(string)
     print("\n\nReview these results at:"+storeDir)
     f=open(storeDir+"results/result"+time.strftime("%Y-%m-%d_%H:%M")+".txt", "a+")
-    f.write(string2)
     f.write(string)
+    f.close()
+    f=open(storeDir+"results/crawled"+time.strftime("%Y-%m-%d_%H:%M")+".txt", "a+")
+    f.write(string2)
     f.close()
     exit(0)
 
 try:
     setOpts()
+    if debug:
+        print("Set opts")
     if setAccountDomains():
+        if debug:
+            print(accountDomains)
         mkdir()
+        if debug:
+            print("mkdir, entering drive")
         drive(startDir)
         printResults()
     else:
@@ -353,5 +419,5 @@ except KeyboardInterrupt:
     exit(2)
 except Exception as e:
     printResults()
-    print(e.message, e.__doc__)
+    print( str(e.__doc__))
     exit(1)
